@@ -10,6 +10,7 @@ import (
 	"strings"
 	"fmt"
 	"path"
+	"runtime"
 
 	"gopkg.in/yaml.v3"
 )
@@ -17,6 +18,7 @@ import (
 type Attributes struct {
 	Dst string `yaml:"dst"`
 	Typ string `yaml:"typ"`
+	Os  string `yaml:"os"`
 }
 
 type Dots struct {
@@ -172,7 +174,16 @@ func doDot(file string, attr Attributes) error {
 func main() {
 	flag.Parse()
 	dots := readDots()
-	for file, attributes := range dots.Files {
-		doDot(file, attributes)
+	osMap := map[string]string {
+		"linux": "linux",
+		"macos": "darwin",
+		"darwin": "darwin",
+		"all": runtime.GOOS,
+		"": runtime.GOOS,
+	}
+	for file, attr := range dots.Files {
+		if osMap[attr.Os] == runtime.GOOS {
+			doDot(file, attr)
+		}
 	}
 }

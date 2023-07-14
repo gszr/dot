@@ -1,12 +1,14 @@
 files:
   fixtures/gitconfig:
     dst: out/gitconfig
-    sys: all # all, linux, macos
+    os: all # all, linux, macos
   fixtures/zshrc:
     dst: out/zshrc
     typ: copy
+    os: linux
     opt: # copy opts NYI
-  fixtures/config/nvim:
   test:
+    dst: out/test
+    os: macos
 
 # handle directories
