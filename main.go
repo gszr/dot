@@ -25,13 +25,16 @@ type Dots struct {
 	Files map[string]Attributes `yaml:"files"`
 }
 
+var logger *log.Logger
+
 var rcFile string
 var verbose bool
-var logger *log.Logger
+var rmOnly bool
 
 func initFlags() {
 	flag.StringVar(&rcFile, "rc", "dots.yml", "the dots config file")
 	flag.BoolVar(&verbose, "verbose", false, "verbose output")
+	flag.BoolVar(&rmOnly, "rm", false, "only remove targets, do not create")
 }
 
 func init() {
@@ -70,9 +73,6 @@ func validateDots(dots *Dots) (bool, []error) {
 		}
 		if ! pathExists(file) {
 			errs = append(errs, fmt.Errorf("%s: path does not exist", file))
-		}
-		if pathExists(attr.Dst) {
-			errs = append(errs, fmt.Errorf("%s: destination already exists", attr.Dst))
 		}
 		if isDirectory(file) && attr.Typ == "copy" {
 			errs = append(errs, fmt.Errorf("%s: cannot use copy type with directory", file))
@@ -171,6 +171,22 @@ func doDot(file string, attr Attributes) error {
 	return nil
 }
 
+func remove(file string, attr Attributes) error {
+	if exists, err := pathExists(file), os.Remove(attr.Dst); !exists && err != nil {
+		logger.Printf("failed removing file %s, %v", attr.Dst, err)
+		return err
+	}
+	if verbose {
+		switch typ:= attr.Typ; typ {
+		case "link":
+			logger.Printf("removing link %s (from %s)", attr.Dst, file)
+		case "copy":
+			logger.Printf("removing link %s (from %s)", attr.Dst, file)
+		}
+	}
+	return nil
+}
+
 func main() {
 	flag.Parse()
 	dots := readDots()
@@ -182,7 +198,9 @@ func main() {
 		"": runtime.GOOS,
 	}
 	for file, attr := range dots.Files {
-		if osMap[attr.Os] == runtime.GOOS {
+		if rmOnly {
+			remove(file, attr)
+		} else if osMap[attr.Os] == runtime.GOOS {
 			doDot(file, attr)
 		}
 	}
