@@ -144,12 +144,19 @@ func doCopy(file string, dst string) (bool, error) {
 	}
 	defer fin.Close()
 
+	dstDir := path.Dir(dst)
+	if ! pathExists(dstDir) {
+		err := os.MkdirAll(dstDir, 0750)
+		if err != nil {
+			logger.Fatalf("failed creating path %s, %v", dst, err)
+		}
+	}
+
 	fout, err := os.Create(dst)
 	if err != nil {
 		log.Fatalf("failed creating file %s, %v", file, err)
 	}
 	defer fout.Close()
-
 	_, err = io.Copy(fout, fin)
 	if err != nil {
 		log.Fatalf("failed copying file %s to %s, %v", file, dst, err)
