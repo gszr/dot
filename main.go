@@ -168,16 +168,6 @@ func doCopy(file string, dst string) (bool, error) {
 	return true, nil
 }
 
-func doDot(file string, attr Attributes) error {
-	switch typ := attr.Typ; typ {
-	case "link":
-		doLink(file, attr.Dst)
-	case "copy":
-		doCopy(file, attr.Dst)
-	}
-	return nil
-}
-
 func remove(file string, attr Attributes) error {
 	if exists, err := pathExists(file), os.Remove(attr.Dst); !exists && err != nil {
 		logger.Printf("failed removing file %s, %v", attr.Dst, err)
@@ -194,9 +184,17 @@ func remove(file string, attr Attributes) error {
 	return nil
 }
 
-func main() {
-	flag.Parse()
-	dots := readDots()
+func doDots(file string, attr Attributes) error {
+	switch typ := attr.Typ; typ {
+	case "link":
+		doLink(file, attr.Dst)
+	case "copy":
+		doCopy(file, attr.Dst)
+	}
+	return nil
+}
+
+func iterate(dots Dots) {
 	osMap := map[string]string {
 		"linux": "linux",
 		"macos": "darwin",
@@ -208,7 +206,12 @@ func main() {
 		if rmOnly {
 			remove(file, attr)
 		} else if osMap[attr.Os] == runtime.GOOS {
-			doDot(file, attr)
+			doDots(file, attr)
 		}
 	}
+}
+
+func main() {
+	flag.Parse()
+	iterate(readDots())
 }
