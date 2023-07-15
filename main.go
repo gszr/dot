@@ -22,20 +22,30 @@ type FileMapping struct {
 	Os  string
 }
 
+type FileOpts struct {
+	Dir string
+}
+
 type Dots struct {
+	FileOpts FileOpts `yaml:"files_opts"`
 	FileMappings []FileMapping `yaml:"files"`
 }
 
 func (d *Dots) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	var tmpDots struct {
+		FileOpts FileOpts `yaml:"files_opts"`
 		Mappings map[string]FileMapping `yaml:"files"`
 	}
 	err := unmarshal(&tmpDots)
 	if err != nil {
 		return err
 	}
+	d.FileOpts.Dir = tmpDots.FileOpts.Dir
 	for file, mapping := range tmpDots.Mappings {
 		mapping.Src = file
+		if len(d.FileOpts.Dir) > 0 {
+			mapping.Src = path.Join(d.FileOpts.Dir, file)
+		}
 		if len(mapping.Dst) == 0 {
 			mapping.Dst = inferDestination(mapping.Src)
 		}
@@ -50,14 +60,16 @@ func (d *Dots) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 var logger *log.Logger
 
-var rcFile string
-var verbose bool
-var rmOnly bool
+var flagDotFile string
+var flagVerbose bool
+var flagRmOnly bool
+var flagRm bool
 
 func initFlags() {
-	flag.StringVar(&rcFile, "rc", "dots.yml", "the dots config file")
-	flag.BoolVar(&verbose, "verbose", false, "verbose output")
-	flag.BoolVar(&rmOnly, "rm", false, "only remove targets, do not create")
+	flag.StringVar(&flagDotFile, "dot", "dot.yml", "the dots config file")
+	flag.BoolVar(&flagVerbose, "verbose", false, "verbose output")
+	flag.BoolVar(&flagRm, "rm", true, "remove targets before creating")
+	flag.BoolVar(&flagRmOnly, "rm-only", false, "only remove targets, do not create")
 }
 
 func init() {
@@ -87,7 +99,6 @@ func isDirectory(path string) bool {
 func validateDots(dots *Dots) (bool, []error) {
 	var errs []error
 	for _, mapping := range dots.FileMappings {
-		fmt.Println(mapping.Dst)
 		if ! pathExists(mapping.Src) {
 			errs = append(errs, fmt.Errorf("%s: path does not exist", mapping.Src))
 		}  else if isDirectory(mapping.Src) && mapping.Typ == "copy" {
@@ -109,21 +120,21 @@ func expandTilde(path string) string {
 	return path
 }
 
-func readDots() Dots {
-	rcFileData, err := ioutil.ReadFile(rcFile)
+func readDotFile() Dots {
+	rcFileData, err := ioutil.ReadFile(flagDotFile)
 	if err != nil {
-		log.Fatalf("error reading config data: %v", err)
+		logger.Fatalf("error reading config data: %v", err)
 	}
 	var dots Dots
 	if err := yaml.Unmarshal([]byte(rcFileData), &dots); err != nil {
-		log.Fatalf("cannot decode data: %v", err)
+		logger.Fatalf("cannot decode data: %v", err)
 	}
 	valid, errs := validateDots(&dots)
 	if ! valid {
 		for _, err := range errs {
 			logger.Printf("failed validating dots file: %v", err)
 		}
-		os.Exit(0)
+		os.Exit(1)
 	}
 	return dots
 }
@@ -132,7 +143,7 @@ func doLink(file string, dst string) {
 	if !strings.HasPrefix(file, "/") {
 		cwd, err := os.Getwd()
 		if err != nil {
-			log.Fatalf("failed getting cwd: %v", err)
+			logger.Fatalf("failed getting cwd: %v", err)
 		}
 		file = cwd + "/" + file
 	}
@@ -147,7 +158,7 @@ func doLink(file string, dst string) {
 	if err != nil {
 		logger.Fatalf("failed linking %s -> %s: %v", file, dst, err)
 	}
-	if verbose {
+	if flagVerbose {
 		logger.Printf("linking  %s -> %s\n", file, dst)
 	}
 }
@@ -176,7 +187,7 @@ func doCopy(file string, dst string) (bool, error) {
 	if err != nil {
 		log.Fatalf("failed copying file %s to %s, %v", file, dst, err)
 	}
-	if verbose {
+	if flagVerbose {
 		logger.Printf("copying %s -> %s\n", file, dst)
 	}
 
@@ -184,14 +195,14 @@ func doCopy(file string, dst string) (bool, error) {
 }
 
 func remove(mapping FileMapping) error {
-	if dstExists := pathExists(mapping.Dst); ! dstExists && verbose {
+	if dstExists := pathExists(mapping.Dst); ! dstExists && flagVerbose {
 		logger.Printf("rm %s: skipping, file not there\n", mapping.Dst)
 	} else {
 		err := os.Remove(mapping.Dst)
 		if err != nil {
 			logger.Printf("failed removing file %s, %v\n", mapping.Dst, err)
 		}
-		if verbose {
+		if flagVerbose {
 			logger.Printf("rm %s: success\n", mapping.Dst)
 		}
 	}
@@ -218,20 +229,22 @@ func iterate(dots Dots) {
 	}
 	for _, mapping := range dots.FileMappings {
 		if osMap[mapping.Os] != runtime.GOOS {
-			if verbose {
+			if flagVerbose {
 				logger.Printf("skipping %s: not on %s\n", mapping.Src, mapping.Os)
 			}
 			continue
 		}
-		if rmOnly {
+		if flagRm {
 			remove(mapping)
-		} else {
-			doDots(mapping)
+			if flagRmOnly {
+				continue
+			}
 		}
+		doDots(mapping)
 	}
 }
 
 func main() {
 	flag.Parse()
-	iterate(readDots())
+	iterate(readDotFile())
 }

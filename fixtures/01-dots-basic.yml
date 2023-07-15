@@ -1,0 +1,11 @@
+files:
+  fixtures/gitconfig:
+    dst: out/gitconfig
+    os: all # all, linux, macos
+  fixtures/zshrc:
+    dst: out/zshrc
+    typ: copy
+    os: linux
+    opt: # copy opts NYI
+
+# handle directories
