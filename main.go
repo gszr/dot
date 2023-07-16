@@ -82,7 +82,7 @@ func inferDestination(file string) string {
 }
 
 func pathExists(path string) bool {
-	if _, err := os.Stat(path); os.IsNotExist(err) {
+	if _, err := os.Lstat(path); os.IsNotExist(err) {
 		return false
 	}
 	return true
