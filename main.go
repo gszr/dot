@@ -43,11 +43,11 @@ func (d *Dots) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	d.FileOpts.Dir = tmpDots.FileOpts.Dir
 	for file, mapping := range tmpDots.Mappings {
 		mapping.Src = file
-		if len(d.FileOpts.Dir) > 0 {
-			mapping.Src = path.Join(d.FileOpts.Dir, file)
-		}
 		if len(mapping.Dst) == 0 {
 			mapping.Dst = inferDestination(mapping.Src)
+		}
+		if len(d.FileOpts.Dir) > 0 {
+			mapping.Src = path.Join(d.FileOpts.Dir, file)
 		}
 		if len(mapping.Typ) == 0 {
 			mapping.Typ = "link"
