@@ -78,7 +78,11 @@ func init() {
 }
 
 func inferDestination(file string) string {
-	return getHomeDir() + "/." + file
+	if strings.HasPrefix(file, ".") {
+		return getHomeDir() + "/" + file
+	} else {
+		return getHomeDir() + "/." + file
+	}
 }
 
 func pathExists(path string) bool {
