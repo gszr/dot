@@ -43,6 +43,7 @@ func (d *Dots) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	d.FileOpts.Dir = tmpDots.FileOpts.Dir
 	for file, mapping := range tmpDots.Mappings {
 		mapping.Src = file
+		mapping.Dst = expandTilde(mapping.Dst)
 		if len(mapping.Dst) == 0 {
 			mapping.Dst = inferDestination(mapping.Src)
 		}
