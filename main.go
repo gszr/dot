@@ -6,7 +6,6 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
-	"os/user"
 	"strings"
 	"fmt"
 	"path"
@@ -27,35 +26,24 @@ type Opts struct {
 }
 
 type Dots struct {
-	Opts Opts `yaml:"opts"`
+	Opts Opts `yaml:"opt"`
 	FileMappings []FileMapping `yaml:"map"`
 }
 
 func (d *Dots) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	var tmpDots struct {
-		Opts Opts `yaml:"files_opts"`
+		Opts Opts `yaml:"opt"`
 		Mappings map[string]FileMapping `yaml:"map"`
 	}
 	err := unmarshal(&tmpDots)
 	if err != nil {
 		return err
 	}
-	d.Opts.Cd = tmpDots.Opts.Cd
+	d.Opts = tmpDots.Opts
 	for file, mapping := range tmpDots.Mappings {
 		mapping.From = file
-		mapping.To = expandTilde(mapping.To)
-		if len(mapping.To) == 0 {
-			mapping.To = inferDestination(mapping.From)
-		}
-		if len(d.Opts.Cd) > 0 {
-			mapping.From = path.Join(d.Opts.Cd, file)
-		}
-		if len(mapping.As) == 0 {
-			mapping.As = "link"
-		}
 		d.FileMappings = append(d.FileMappings, mapping)
 	}
-
 	return nil
 }
 
@@ -101,7 +89,7 @@ func isDirectory(path string) bool {
 	return fileInfo.IsDir()
 }
 
-func validateDots(dots *Dots) (bool, []error) {
+func validateDots(dots Dots) (bool, []error) {
 	var errs []error
 	for _, mapping := range dots.FileMappings {
 		if ! pathExists(mapping.From) {
@@ -113,10 +101,40 @@ func validateDots(dots *Dots) (bool, []error) {
 	return len(errs) == 0, errs
 }
 
-func getHomeDir() string {
-	usr, _ := user.Current()
-	return usr.HomeDir
+func transformDots(dots Dots) Dots {
+	opts := dots.Opts
+	mappings := dots.FileMappings
+
+	var newDots Dots
+	newDots.Opts = opts
+
+	for _, mapping := range mappings {
+		if len(mapping.To) > 0 {
+			// expand destination ~
+			mapping.To = expandTilde(mapping.To)
+		} else {
+			// infer destination based on From
+			mapping.To = inferDestination(mapping.From)
+		}
+		if len(opts.Cd) > 0 {
+			// Cd set: add prefix to From
+			mapping.From = path.Join(opts.Cd, mapping.From)
+		}
+		// default As to symlink
+		if len(mapping.As) == 0 {
+			mapping.As = "link"
+		}
+
+		newDots.FileMappings = append(newDots.FileMappings, mapping)
+	}
+
+	return newDots
 }
+
+func getHomeDir() string {
+	return os.Getenv("HOME")
+}
+
 func expandTilde(path string) string {
 	if strings.HasPrefix(path, "~") {
 		homeDir := getHomeDir()
@@ -134,14 +152,17 @@ func readDotFile() Dots {
 	if err := yaml.Unmarshal([]byte(rcFileData), &dots); err != nil {
 		logger.Fatalf("cannot decode data: %v", err)
 	}
-	valid, errs := validateDots(&dots)
+
+	newDots := transformDots(dots)
+	valid, errs := validateDots(newDots)
 	if ! valid {
 		for _, err := range errs {
 			logger.Printf("failed validating dots file: %v", err)
 		}
 		os.Exit(1)
 	}
-	return dots
+
+	return newDots
 }
 
 func doLink(file string, dst string) {

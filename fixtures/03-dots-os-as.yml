@@ -1,0 +1,13 @@
+# to, os, as
+
+map:
+  gitconfig:
+    to: out/gitconfig
+    os: all # all, linux, macos
+  zshrc:
+    to: out/zshrc
+    as: copy
+    os: linux
+
+opt:
+  cd: fixtures/

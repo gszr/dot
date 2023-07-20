@@ -1,11 +1,8 @@
-files:
-  fixtures/gitconfig:
-    to: out/gitconfig
-    os: all # all, linux, macos
-  fixtures/zshrc:
-    to: out/zshrc
-    as: copy
-    os: linux
-    opt: # copy opts NYI
+# basic mapping
 
-# handle directories
+map:
+  gitconfig:
+  zshrc:
+
+opt:
+  cd: fixtures/

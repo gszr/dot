@@ -14,10 +14,10 @@ dot files manager.
 Let's start with an example:
 
 ```
-files:
+map:
   i3:
   imwheelrc:
-  config/alacritty:
+  config/alacritty.yml:
   config/redshift.conf:
 ```
 
@@ -48,10 +48,29 @@ map:
     os: linux
   imwheelrc:
     os: linux
-  config/alacritty:
+  config/alacritty.yml:
     os: macos
   docker/config.json:
     as: copy
+
+opt:
+  cd: dots/
+```
+
+In this example, all files live under a subdirectory `dots/`.
+```
+$ tree .
+.
+├── dots
+│   ├── config
+│   │   └── alacritty.yml
+│   ├── docker
+│   │   └── config.json
+│   ├── i3
+│   ├── imwheelrc
+│   ├── xinitrc
+│   └── Xresources
+└── dot.yml
 ```
 
 ## Features
