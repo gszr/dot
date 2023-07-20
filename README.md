@@ -21,7 +21,7 @@ map:
   config/redshift.conf:
 ```
 
-Behavior
+### Behavior
 
 - Top-level `files` map lists files along with mapping attributes
 - Each file name maps to a file in the current working directory -- ie,
@@ -57,7 +57,7 @@ opt:
   cd: dots/
 ```
 
-In this example, all files live under a subdirectory `dots/`.
+In this example, all files live under a subdirectory `dots/`:
 ```
 $ tree .
 .
