@@ -4,7 +4,7 @@ dot files manager.
 
 ## What
 
-* Map dotfiles living in a directory -- say, a git repo -- living somewhere 
+* Map dotfiles living in a directory somehwere -- say, a git repo --  
   to their destination
 * Future: fetch additional resources from the web, also mapping them to their 
   destination
