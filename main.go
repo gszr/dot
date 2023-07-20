@@ -2,50 +2,21 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
 	"os"
-	"strings"
-	"fmt"
 	"path"
 	"runtime"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
 
-type FileMapping struct {
-	From string
-	To string
-	As string
-	Os  string
-}
-
-type Opts struct {
-	Cd string
-}
-
-type Dots struct {
-	Opts Opts `yaml:"opt"`
-	FileMappings []FileMapping `yaml:"map"`
-}
-
-func (d *Dots) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	var tmpDots struct {
-		Opts Opts `yaml:"opt"`
-		Mappings map[string]FileMapping `yaml:"map"`
-	}
-	err := unmarshal(&tmpDots)
-	if err != nil {
-		return err
-	}
-	d.Opts = tmpDots.Opts
-	for file, mapping := range tmpDots.Mappings {
-		mapping.From = file
-		d.FileMappings = append(d.FileMappings, mapping)
-	}
-	return nil
-}
+/*
+ * initialization and flags
+ */
 
 var logger *log.Logger
 
@@ -66,12 +37,214 @@ func init() {
 	logger = log.New(os.Stderr, "", 0)
 }
 
+/*
+ * core data structures and operations
+ */
+
+type FileMapping struct {
+	From string
+	To   string
+	As   string
+	Os   string
+}
+
+// TODO return error - caller handles error
+func (m FileMapping) doLink() {
+	err := os.Symlink(m.From, m.To)
+	if err != nil {
+		logger.Fatalf("failed linking %s -> %s: %v", m.From, m.To, err)
+	}
+	if flagVerbose {
+		logger.Printf("linking  %s -> %s\n", m.From, m.To)
+	}
+}
+
+// TODO return error - caller handles error
+func (m FileMapping) doCopy() (bool, error) {
+	fin, err := os.Open(m.From)
+	if err != nil {
+		log.Fatalf("failed opening file %s, %v", m.From, err)
+	}
+	defer fin.Close()
+
+	fout, err := os.Create(m.To)
+	if err != nil {
+		log.Fatalf("failed creating file %s, %v", m.From, err)
+	}
+	defer fout.Close()
+
+	_, err = io.Copy(fout, fin)
+	if err != nil {
+		log.Fatalf("failed copying file %s to %s, %v", m.From, m.To, err)
+	}
+	if flagVerbose {
+		logger.Printf("copying %s -> %s\n", m.From, m.To)
+	}
+
+	return true, nil
+}
+
+// TODO return error - caller handles
+func (m FileMapping) unmap() error {
+	if dstExists := pathExists(m.To); !dstExists && flagVerbose {
+		logger.Printf("rm %s: skipping, file not there\n", m.To)
+	} else {
+		err := os.Remove(m.To)
+		if err != nil {
+			logger.Printf("failed removing file %s, %v\n", m.To, err)
+		}
+		if flagVerbose {
+			logger.Printf("rm %s: success\n", m.To)
+		}
+	}
+	return nil
+}
+
+// TODO return error - caller handles
+func (m FileMapping) domap() error {
+	// ensure destination path exists
+	if err := createPath(m.To); err != nil {
+		logger.Fatalf("failed creating path %s, %v", m.To, err)
+	}
+
+	switch typ := m.As; typ {
+	case "link":
+		m.doLink()
+	case "copy":
+		m.doCopy()
+	}
+	return nil
+}
+
+func (m FileMapping) isMatchingOs() bool {
+	osMap := map[string]string{
+		"linux":  "linux",
+		"macos":  "darwin",
+		"darwin": "darwin",
+		"all":    runtime.GOOS,
+		"":       runtime.GOOS,
+	}
+	if osMap[m.Os] != runtime.GOOS {
+		return false
+	}
+	return true
+}
+
+type Opts struct {
+	Cd string
+}
+
+type Dots struct {
+	Opts         Opts          `yaml:"opt"`
+	FileMappings []FileMapping `yaml:"map"`
+}
+
+func (d *Dots) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var tmpDots struct {
+		Opts     Opts                   `yaml:"opt"`
+		Mappings map[string]FileMapping `yaml:"map"`
+	}
+	err := unmarshal(&tmpDots)
+	if err != nil {
+		return err
+	}
+	d.Opts = tmpDots.Opts
+	for file, mapping := range tmpDots.Mappings {
+		mapping.From = file
+		d.FileMappings = append(d.FileMappings, mapping)
+	}
+	return nil
+}
+
+func (dots Dots) validate() (bool, []error) {
+	var errs []error
+	for _, mapping := range dots.FileMappings {
+		if !pathExists(mapping.From) {
+			errs = append(errs, fmt.Errorf("%s: path does not exist", mapping.From))
+		} else if isDirectory(mapping.From) && mapping.As == "copy" {
+			errs = append(errs, fmt.Errorf("%s: cannot use copy type with directory", mapping.From))
+		}
+	}
+	return len(errs) == 0, errs
+}
+
 func inferDestination(file string) string {
 	if strings.HasPrefix(file, ".") {
 		return getHomeDir() + "/" + file
 	} else {
 		return getHomeDir() + "/." + file
 	}
+}
+
+func (dots Dots) transform() Dots {
+	opts := dots.Opts
+	mappings := dots.FileMappings
+
+	var newDots Dots
+	newDots.Opts = opts
+
+	for _, mapping := range mappings {
+		// To is expanded / inferred first: it's value is based off of
+		// `from` before prefix or cwd are added to it
+		if len(mapping.To) > 0 {
+			// expand destination ~
+			mapping.To = expandTilde(mapping.To)
+		} else {
+			// infer destination based on From
+			mapping.To = inferDestination(mapping.From)
+		}
+
+		if len(opts.Cd) > 0 {
+			// Cd set: add prefix to From
+			mapping.From = path.Join(opts.Cd, mapping.From)
+		}
+		if !strings.HasPrefix(mapping.From, "/") {
+			cwd, _ := os.Getwd()
+			mapping.From = cwd + "/" + mapping.From
+		}
+
+		// default As to symlink
+		if len(mapping.As) == 0 {
+			mapping.As = "link"
+		}
+
+		newDots.FileMappings = append(newDots.FileMappings, mapping)
+	}
+
+	return newDots
+}
+
+func (dots Dots) iterate() {
+	for _, mapping := range dots.FileMappings {
+		if !mapping.isMatchingOs() {
+			if flagVerbose {
+				logger.Printf("not on %s, skipping %s\n", mapping.Os, mapping.From)
+			}
+			continue
+		}
+		if flagRm { // remove before mapping by default
+			mapping.unmap()
+			if flagRmOnly {
+				continue
+			}
+		}
+		mapping.domap()
+	}
+}
+
+/*
+ * Helpers
+ */
+
+func createPath(p string) error {
+	dstDir := path.Dir(p)
+	if !pathExists(dstDir) {
+		err := os.MkdirAll(dstDir, 0750)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func pathExists(path string) bool {
@@ -89,48 +262,6 @@ func isDirectory(path string) bool {
 	return fileInfo.IsDir()
 }
 
-func validateDots(dots Dots) (bool, []error) {
-	var errs []error
-	for _, mapping := range dots.FileMappings {
-		if ! pathExists(mapping.From) {
-			errs = append(errs, fmt.Errorf("%s: path does not exist", mapping.From))
-		}  else if isDirectory(mapping.From) && mapping.As == "copy" {
-			errs = append(errs, fmt.Errorf("%s: cannot use copy type with directory", mapping.From))
-		}
-	}
-	return len(errs) == 0, errs
-}
-
-func transformDots(dots Dots) Dots {
-	opts := dots.Opts
-	mappings := dots.FileMappings
-
-	var newDots Dots
-	newDots.Opts = opts
-
-	for _, mapping := range mappings {
-		if len(mapping.To) > 0 {
-			// expand destination ~
-			mapping.To = expandTilde(mapping.To)
-		} else {
-			// infer destination based on From
-			mapping.To = inferDestination(mapping.From)
-		}
-		if len(opts.Cd) > 0 {
-			// Cd set: add prefix to From
-			mapping.From = path.Join(opts.Cd, mapping.From)
-		}
-		// default As to symlink
-		if len(mapping.As) == 0 {
-			mapping.As = "link"
-		}
-
-		newDots.FileMappings = append(newDots.FileMappings, mapping)
-	}
-
-	return newDots
-}
-
 func getHomeDir() string {
 	return os.Getenv("HOME")
 }
@@ -143,19 +274,20 @@ func expandTilde(path string) string {
 	return path
 }
 
-func readDotFile() Dots {
-	rcFileData, err := ioutil.ReadFile(flagDotFile)
+func readDotFile(file string) Dots {
+	rcFileData, err := ioutil.ReadFile(file)
 	if err != nil {
 		logger.Fatalf("error reading config data: %v", err)
 	}
+
 	var dots Dots
 	if err := yaml.Unmarshal([]byte(rcFileData), &dots); err != nil {
 		logger.Fatalf("cannot decode data: %v", err)
 	}
 
-	newDots := transformDots(dots)
-	valid, errs := validateDots(newDots)
-	if ! valid {
+	newDots := dots.transform()
+	valid, errs := newDots.validate()
+	if !valid {
 		for _, err := range errs {
 			logger.Printf("failed validating dots file: %v", err)
 		}
@@ -165,112 +297,8 @@ func readDotFile() Dots {
 	return newDots
 }
 
-func doLink(file string, dst string) {
-	if !strings.HasPrefix(file, "/") {
-		cwd, err := os.Getwd()
-		if err != nil {
-			logger.Fatalf("failed getting cwd: %v", err)
-		}
-		file = cwd + "/" + file
-	}
-	dstDir := path.Dir(dst)
-	if ! pathExists(dstDir) {
-		err := os.MkdirAll(dstDir, 0750)
-		if err != nil {
-			logger.Fatalf("failed creating path %s, %v", dst, err)
-		}
-	}
-	err := os.Symlink(file, dst)
-	if err != nil {
-		logger.Fatalf("failed linking %s -> %s: %v", file, dst, err)
-	}
-	if flagVerbose {
-		logger.Printf("linking  %s -> %s\n", file, dst)
-	}
-}
-
-func doCopy(file string, dst string) (bool, error) {
-	fin, err := os.Open(file)
-	if err != nil {
-		log.Fatalf("failed opening file %s, %v", file, err)
-	}
-	defer fin.Close()
-
-	dstDir := path.Dir(dst)
-	if ! pathExists(dstDir) {
-		err := os.MkdirAll(dstDir, 0750)
-		if err != nil {
-			logger.Fatalf("failed creating path %s, %v", dst, err)
-		}
-	}
-
-	fout, err := os.Create(dst)
-	if err != nil {
-		log.Fatalf("failed creating file %s, %v", file, err)
-	}
-	defer fout.Close()
-	_, err = io.Copy(fout, fin)
-	if err != nil {
-		log.Fatalf("failed copying file %s to %s, %v", file, dst, err)
-	}
-	if flagVerbose {
-		logger.Printf("copying %s -> %s\n", file, dst)
-	}
-
-	return true, nil
-}
-
-func remove(mapping FileMapping) error {
-	if dstExists := pathExists(mapping.To); ! dstExists && flagVerbose {
-		logger.Printf("rm %s: skipping, file not there\n", mapping.To)
-	} else {
-		err := os.Remove(mapping.To)
-		if err != nil {
-			logger.Printf("failed removing file %s, %v\n", mapping.To, err)
-		}
-		if flagVerbose {
-			logger.Printf("rm %s: success\n", mapping.To)
-		}
-	}
-	return nil
-}
-
-func doDots(mapping FileMapping) error {
-	switch typ := mapping.As; typ {
-	case "link":
-		doLink(mapping.From, mapping.To)
-	case "copy":
-		doCopy(mapping.From, mapping.To)
-	}
-	return nil
-}
-
-func iterate(dots Dots) {
-	osMap := map[string]string {
-		"linux": "linux",
-		"macos": "darwin",
-		"darwin": "darwin",
-		"all": runtime.GOOS,
-		"": runtime.GOOS,
-	}
-	for _, mapping := range dots.FileMappings {
-		if osMap[mapping.Os] != runtime.GOOS {
-			if flagVerbose {
-				logger.Printf("skipping %s: not on %s\n", mapping.From, mapping.Os)
-			}
-			continue
-		}
-		if flagRm {
-			remove(mapping)
-			if flagRmOnly {
-				continue
-			}
-		}
-		doDots(mapping)
-	}
-}
-
 func main() {
 	flag.Parse()
-	iterate(readDotFile())
+	dots := readDotFile(flagDotFile)
+	dots.iterate()
 }

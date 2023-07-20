@@ -10,4 +10,4 @@ map:
     os: linux
 
 opt:
-  cd: fixtures/
+  cd: examples/

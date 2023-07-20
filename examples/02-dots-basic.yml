@@ -6,4 +6,4 @@ map:
   zshrc:
     to: ~/.zshrc
 opt:
-  cd: fixtures/
+  cd: examples

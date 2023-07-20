@@ -1,0 +1,10 @@
+# basic mapping
+
+map:
+  gitconfig:
+    to: out/gitconfig
+  zshrc:
+    to: out/zshrc
+
+opt:
+  cd: examples/
