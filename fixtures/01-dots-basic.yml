@@ -1,10 +1,10 @@
 files:
   fixtures/gitconfig:
-    dst: out/gitconfig
+    to: out/gitconfig
     os: all # all, linux, macos
   fixtures/zshrc:
-    dst: out/zshrc
-    typ: copy
+    to: out/zshrc
+    as: copy
     os: linux
     opt: # copy opts NYI
 

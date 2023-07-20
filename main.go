@@ -16,42 +16,42 @@ import (
 )
 
 type FileMapping struct {
-	Src string
-	Dst string
-	Typ string
+	From string
+	To string
+	As string
 	Os  string
 }
 
-type FileOpts struct {
-	Dir string
+type Opts struct {
+	Cd string
 }
 
 type Dots struct {
-	FileOpts FileOpts `yaml:"files_opts"`
-	FileMappings []FileMapping `yaml:"files"`
+	Opts Opts `yaml:"opts"`
+	FileMappings []FileMapping `yaml:"map"`
 }
 
 func (d *Dots) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	var tmpDots struct {
-		FileOpts FileOpts `yaml:"files_opts"`
-		Mappings map[string]FileMapping `yaml:"files"`
+		Opts Opts `yaml:"files_opts"`
+		Mappings map[string]FileMapping `yaml:"map"`
 	}
 	err := unmarshal(&tmpDots)
 	if err != nil {
 		return err
 	}
-	d.FileOpts.Dir = tmpDots.FileOpts.Dir
+	d.Opts.Cd = tmpDots.Opts.Cd
 	for file, mapping := range tmpDots.Mappings {
-		mapping.Src = file
-		mapping.Dst = expandTilde(mapping.Dst)
-		if len(mapping.Dst) == 0 {
-			mapping.Dst = inferDestination(mapping.Src)
+		mapping.From = file
+		mapping.To = expandTilde(mapping.To)
+		if len(mapping.To) == 0 {
+			mapping.To = inferDestination(mapping.From)
 		}
-		if len(d.FileOpts.Dir) > 0 {
-			mapping.Src = path.Join(d.FileOpts.Dir, file)
+		if len(d.Opts.Cd) > 0 {
+			mapping.From = path.Join(d.Opts.Cd, file)
 		}
-		if len(mapping.Typ) == 0 {
-			mapping.Typ = "link"
+		if len(mapping.As) == 0 {
+			mapping.As = "link"
 		}
 		d.FileMappings = append(d.FileMappings, mapping)
 	}
@@ -104,10 +104,10 @@ func isDirectory(path string) bool {
 func validateDots(dots *Dots) (bool, []error) {
 	var errs []error
 	for _, mapping := range dots.FileMappings {
-		if ! pathExists(mapping.Src) {
-			errs = append(errs, fmt.Errorf("%s: path does not exist", mapping.Src))
-		}  else if isDirectory(mapping.Src) && mapping.Typ == "copy" {
-			errs = append(errs, fmt.Errorf("%s: cannot use copy type with directory", mapping.Src))
+		if ! pathExists(mapping.From) {
+			errs = append(errs, fmt.Errorf("%s: path does not exist", mapping.From))
+		}  else if isDirectory(mapping.From) && mapping.As == "copy" {
+			errs = append(errs, fmt.Errorf("%s: cannot use copy type with directory", mapping.From))
 		}
 	}
 	return len(errs) == 0, errs
@@ -200,26 +200,26 @@ func doCopy(file string, dst string) (bool, error) {
 }
 
 func remove(mapping FileMapping) error {
-	if dstExists := pathExists(mapping.Dst); ! dstExists && flagVerbose {
-		logger.Printf("rm %s: skipping, file not there\n", mapping.Dst)
+	if dstExists := pathExists(mapping.To); ! dstExists && flagVerbose {
+		logger.Printf("rm %s: skipping, file not there\n", mapping.To)
 	} else {
-		err := os.Remove(mapping.Dst)
+		err := os.Remove(mapping.To)
 		if err != nil {
-			logger.Printf("failed removing file %s, %v\n", mapping.Dst, err)
+			logger.Printf("failed removing file %s, %v\n", mapping.To, err)
 		}
 		if flagVerbose {
-			logger.Printf("rm %s: success\n", mapping.Dst)
+			logger.Printf("rm %s: success\n", mapping.To)
 		}
 	}
 	return nil
 }
 
 func doDots(mapping FileMapping) error {
-	switch typ := mapping.Typ; typ {
+	switch typ := mapping.As; typ {
 	case "link":
-		doLink(mapping.Src, mapping.Dst)
+		doLink(mapping.From, mapping.To)
 	case "copy":
-		doCopy(mapping.Src, mapping.Dst)
+		doCopy(mapping.From, mapping.To)
 	}
 	return nil
 }
@@ -235,7 +235,7 @@ func iterate(dots Dots) {
 	for _, mapping := range dots.FileMappings {
 		if osMap[mapping.Os] != runtime.GOOS {
 			if flagVerbose {
-				logger.Printf("skipping %s: not on %s\n", mapping.Src, mapping.Os)
+				logger.Printf("skipping %s: not on %s\n", mapping.From, mapping.Os)
 			}
 			continue
 		}
