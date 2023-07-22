@@ -284,7 +284,11 @@ func readDotFile(file string) Dots {
 	}
 
 	var dots Dots
-	if err := yaml.Unmarshal([]byte(rcFileData), &dots); err != nil {
+
+	decoder := yaml.NewDecoder(bytes.NewReader(rcFileData))
+	decoder.KnownFields(true)
+
+	if err := decoder.Decode(&dots); err != nil {
 		logger.Fatalf("cannot decode data: %v", err)
 	}
 
