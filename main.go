@@ -1,8 +1,9 @@
 package main
 
 import (
-	"fmt"
+	"bytes"
 	"flag"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
@@ -20,6 +21,7 @@ import (
 
 var logger *log.Logger
 
+var flagValidateOnly bool
 var flagDotFile string
 var flagVerbose bool
 var flagRmOnly bool
@@ -30,6 +32,7 @@ func initFlags() {
 	flag.BoolVar(&flagVerbose, "verbose", false, "verbose output")
 	flag.BoolVar(&flagRm, "rm", true, "remove targets before creating")
 	flag.BoolVar(&flagRmOnly, "rm-only", false, "only remove targets, do not create")
+	flag.BoolVar(&flagValidateOnly, "validate-only", false, "only read and validate dots file")
 }
 
 func init() {
@@ -292,6 +295,11 @@ func readDotFile(file string) Dots {
 			logger.Printf("failed validating dots file: %v", err)
 		}
 		os.Exit(1)
+	}
+
+	if flagValidateOnly {
+		logger.Printf("yay, dots file valid!")
+		os.Exit(0)
 	}
 
 	return newDots
