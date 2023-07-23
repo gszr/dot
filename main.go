@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"path"
@@ -127,10 +126,7 @@ func (m FileMapping) isMatchingOs() bool {
 		"all":    runtime.GOOS,
 		"":       runtime.GOOS,
 	}
-	if osMap[m.Os] != runtime.GOOS {
-		return false
-	}
-	return true
+	return osMap[m.Os] == runtime.GOOS
 }
 
 type Opts struct {
@@ -278,7 +274,7 @@ func expandTilde(path string) string {
 }
 
 func readDotFile(file string) Dots {
-	rcFileData, err := ioutil.ReadFile(file)
+	rcFileData, err := os.ReadFile(file)
 	if err != nil {
 		logger.Fatalf("error reading config data: %v", err)
 	}

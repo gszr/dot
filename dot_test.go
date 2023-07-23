@@ -1,10 +1,9 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
+	"github.com/stretchr/testify/assert"
 	"gopkg.in/yaml.v3"
-	"io/ioutil"
 	"os"
 	"testing"
 )
@@ -20,7 +19,7 @@ func isSymlink(path string) bool {
 
 func TestDoLink(t *testing.T) {
 	to := "out/"
-	_ = createPath(to)
+	assert.Nil(t, createPath(to))
 	defer func() {
 		_ = os.RemoveAll(to)
 	}()
@@ -32,14 +31,12 @@ func TestDoLink(t *testing.T) {
 	}
 
 	m.doLink()
-	if !isSymlink(m.To) {
-		t.Errorf("%s not symlink", m.To)
-	}
+	assert.True(t, isSymlink(m.To))
 }
 
 func TestDoCopy(t *testing.T) {
 	to := "out/"
-	_ = createPath(to)
+	assert.Nil(t, createPath(to))
 	defer func() {
 		_ = os.RemoveAll(to)
 	}()
@@ -62,16 +59,26 @@ func TestDoCopy(t *testing.T) {
 		To:   "out/bashrc",
 	}
 
-	m.doCopy()
-	if isSymlink(m.To) {
-		t.Errorf("%s not copy", m.To)
-	}
+	ok, err := m.doCopy()
+	assert.Nil(t, err)
+	assert.True(t, ok)
+	assert.False(t, isSymlink(m.To))
+
+	// same contents
+
+	var fromContents []byte
+	var toContents []byte
+	fromContents, err = os.ReadFile(m.From)
+	assert.Nil(t, err)
+	toContents, err = os.ReadFile(m.To)
+	assert.Nil(t, err)
+	assert.Equal(t, fromContents, toContents)
 }
 
 func TestUnmap(t *testing.T) {
 	// removes a symlink
 	to := "out/"
-	_ = createPath(to)
+	assert.Nil(t, createPath(to))
 	defer func() {
 		_ = os.RemoveAll(to)
 	}()
@@ -83,14 +90,8 @@ func TestUnmap(t *testing.T) {
 	}
 	m.doLink()
 
-	err := m.unmap()
-	if err != nil {
-		t.Errorf("failed unmapping %s", m.To)
-	}
-
-	if pathExists(m.To) {
-		t.Errorf("did not unmap %s", m.To)
-	}
+	assert.Nil(t, m.unmap())
+	assert.False(t, pathExists(m.To))
 }
 
 func TestDoMap(t *testing.T) {
@@ -105,19 +106,11 @@ func TestDoMap(t *testing.T) {
 		As:   "link",
 	}
 
-	err := m.domap()
-	if err != nil {
-		t.Errorf("failed mapping %s", m.To)
-	}
-
-	if !isSymlink(m.To) {
-		t.Errorf("failed creating %s as symlink", m.To)
-	}
+	assert.Nil(t, m.domap())
+	assert.True(t, isSymlink(m.To))
 
 	// creates path
-	if !pathExists("examples") {
-		t.Errorf("should have created path to %s", m.To)
-	}
+	assert.True(t, pathExists("examples"))
 
 	// creates a copy
 	m = FileMapping{
@@ -126,30 +119,18 @@ func TestDoMap(t *testing.T) {
 		As:   "copy",
 	}
 
-	err = m.domap()
-	if err != nil {
-		t.Errorf("failed mapping %s", m.To)
-	}
-
-	if isSymlink(m.To) {
-		t.Errorf("failed creating %s as copy", m.To)
-	}
+	assert.Nil(t, m.domap())
+	assert.False(t, isSymlink(m.To))
 
 	// same contents
 
 	var fromContents []byte
 	var toContents []byte
-	fromContents, err = ioutil.ReadFile(m.From)
-	if err != nil {
-		t.Errorf("failed reading contents of %s", m.From)
-	}
-	toContents, err = ioutil.ReadFile(m.To)
-	if err != nil {
-		t.Errorf("failed reading contents of %s", m.To)
-	}
-	if !bytes.Equal(fromContents, toContents) {
-		t.Errorf("%s and %s contents differ", m.From, m.To)
-	}
+	fromContents, err := os.ReadFile(m.From)
+	assert.Nil(t, err)
+	toContents, err = os.ReadFile(m.To)
+	assert.Nil(t, err)
+	assert.Equal(t, fromContents, toContents)
 }
 
 func TestUnharshalYAML(t *testing.T) {
@@ -163,17 +144,9 @@ opt:
 `
 
 	var dots Dots
-	if err := yaml.Unmarshal([]byte(dotData), &dots); err != nil {
-		t.Errorf("cannot decode data: %v", err)
-	}
-
-	if dots.Opts.Cd != "foo" {
-		t.Errorf("failed unmarshaling field")
-	}
-
-	if len(dots.FileMappings) != 3 {
-		t.Errorf("failed unmarshaling field")
-	}
+	assert.Nil(t, yaml.Unmarshal([]byte(dotData), &dots))
+	assert.Equal(t, dots.Opts.Cd, "foo")
+	assert.Equal(t, len(dots.FileMappings), 3)
 }
 
 func TestValidate(t *testing.T) {
@@ -188,10 +161,9 @@ func TestValidate(t *testing.T) {
 			},
 		},
 	}
-	ok, _ := d.validate()
-	if !ok {
-		t.Errorf("failed validating")
-	}
+	ok, errs := d.validate()
+	assert.Nil(t, errs)
+	assert.True(t, ok)
 
 	// invalid dots: path does not exist
 	d = Dots{
@@ -204,14 +176,10 @@ func TestValidate(t *testing.T) {
 			},
 		},
 	}
-	var errs []error
 	ok, errs = d.validate()
-	if len(errs) != 1 {
-		t.Errorf("more errors than expected")
-	}
-	if errs[0].Error() != fmt.Sprintf("%s: path does not exist", d.FileMappings[0].From) {
-		t.Errorf("unexpected error %s", errs[0].Error())
-	}
+	assert.False(t, ok)
+	assert.Equal(t, len(errs), 1)
+	assert.Contains(t, errs, fmt.Errorf("%s: path does not exist", d.FileMappings[0].From))
 
 	// invalid dots: copy on directory
 	d = Dots{
@@ -226,13 +194,9 @@ func TestValidate(t *testing.T) {
 		},
 	}
 	ok, errs = d.validate()
-	if len(errs) != 1 {
-		t.Errorf("more errors than expected")
-	}
-	if errs[0].Error() != fmt.Sprintf("%s: cannot use copy type with directory",
-		d.FileMappings[0].From) {
-		t.Errorf("unexpected error %s", errs[0].Error())
-	}
+	assert.False(t, ok)
+	assert.Equal(t, len(errs), 1)
+	assert.Contains(t, errs, fmt.Errorf("%s: cannot use copy type with directory", d.FileMappings[0].From))
 }
 
 func TestTransform(t *testing.T) {
@@ -249,28 +213,24 @@ func TestTransform(t *testing.T) {
 		},
 	}
 	dNew := d.transform()
+	assert.NotNil(t, dNew)
 
 	// expands prefix
-	cwd, _ := os.Getwd()
-	if dNew.FileMappings[0].From != cwd+"/"+d.FileMappings[0].From {
-		t.Errorf("path not expanded correctly")
-	}
+	cwd, err := os.Getwd()
+	assert.Nil(t, err)
+	assert.Equal(t, dNew.FileMappings[0].From, cwd+"/"+d.FileMappings[0].From)
 
 	// expands tilde
 	home := os.Getenv("HOME")
-	if dNew.FileMappings[0].To != home+"/.zshrc" {
-		t.Errorf("path not expanded correctly")
-	}
+	assert.NotNil(t, home)
+	assert.Equal(t, dNew.FileMappings[0].To, home+"/.zshrc")
 
 	// infers destination
-	if dNew.FileMappings[1].To != home+"/."+d.FileMappings[1].From {
-		t.Errorf("home not inferred correctly")
-	}
+	assert.Equal(t, dNew.FileMappings[1].To, home+"/."+d.FileMappings[1].From)
 
 	// defaults As to link
-	if dNew.FileMappings[0].As != "link" || dNew.FileMappings[1].As != "link" {
-		t.Errorf("default for As not set correctly")
-	}
+	assert.Equal(t, dNew.FileMappings[0].As, "link")
+	assert.Equal(t, dNew.FileMappings[1].As, "link")
 
 	// valid dots
 	d = Dots{
@@ -285,26 +245,33 @@ func TestTransform(t *testing.T) {
 		},
 	}
 	dNew = d.transform()
-	if dNew.FileMappings[0].From != cwd+"/foo/examples/zshrc" {
-		t.Errorf("prefix opt not expanded correctly")
-	}
+	assert.NotNil(t, dNew)
+	assert.Equal(t, dNew.FileMappings[0].From, cwd+"/foo/examples/zshrc")
 }
 
 func TestReadDotFile(t *testing.T) {
 	f := "examples/01-dots-basic.yml"
 	dots := readDotFile(f)
+	assert.NotNil(t, dots)
 
-	if dots.Opts.Cd != "examples/" {
-		t.Errorf("invalid Cd opt")
-	}
+	assert.Equal(t, dots.Opts.Cd, "examples/")
 
-	cwd, _ := os.Getwd()
-	if dots.FileMappings[0].From != cwd+"/examples/gitconfig" {
-		t.Error("invalid mapping")
-	}
-	if dots.FileMappings[1].From != cwd+"/examples/zshrc" {
-		t.Error("invalid mapping")
-	}
+	cwd, err := os.Getwd()
+	assert.Nil(t, err)
+	assert.NotNil(t, cwd)
+
+	assert.Contains(t, dots.FileMappings, FileMapping{
+		From: cwd + "/examples/gitconfig",
+		To:   "out/gitconfig",
+		As:   "link",
+		Os:   "",
+	})
+	assert.Contains(t, dots.FileMappings, FileMapping{
+		From: cwd + "/examples/zshrc",
+		To:   "out/zshrc",
+		As:   "link",
+		Os:   "",
+	})
 }
 
 func TestInferDestination(t *testing.T) {
@@ -314,9 +281,7 @@ func TestInferDestination(t *testing.T) {
 	}
 	for in, want := range cases {
 		got := inferDestination(in)
-		if got != want {
-			t.Errorf("got %s, want %s", got, want)
-		}
+		assert.Equal(t, got, want)
 	}
 }
 
@@ -328,9 +293,7 @@ func TestExpandTilde(t *testing.T) {
 	}
 	for in, want := range cases {
 		got := expandTilde(in)
-		if got != want {
-			t.Errorf("got %s, want %s", got, want)
-		}
+		assert.Equal(t, got, want)
 	}
 }
 
@@ -342,14 +305,8 @@ func TestCreatePath(t *testing.T) {
 		_ = os.RemoveAll(p)
 	}()
 
-	err := createPath(f)
-	if err != nil {
-		t.Errorf("failed creating path")
-	}
-
-	if !pathExists(p) {
-		t.Errorf("path not correctly created")
-	}
+	assert.Nil(t, createPath(f))
+	assert.True(t, pathExists(p))
 }
 
 func TestPathExists(t *testing.T) {
@@ -361,9 +318,7 @@ func TestPathExists(t *testing.T) {
 	}
 	for in, want := range cases {
 		got := pathExists(in)
-		if got != want {
-			t.Errorf("got %t, want %t", got, want)
-		}
+		assert.Equal(t, got, want)
 	}
 }
 
@@ -375,9 +330,7 @@ func TestIsDirectory(t *testing.T) {
 	}
 	for in, want := range cases {
 		got := isDirectory(in)
-		if got != want {
-			t.Errorf("got %t, want %t", got, want)
-		}
+		assert.Equal(t, got, want)
 	}
 }
 
@@ -389,8 +342,6 @@ func TestGetHomeDir(t *testing.T) {
 	for _, want := range cases {
 		os.Setenv("HOME", want)
 		got := getHomeDir()
-		if got != want {
-			t.Errorf("got %s, want %s", got, want)
-		}
+		assert.Equal(t, got, want)
 	}
 }
