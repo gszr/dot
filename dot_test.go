@@ -30,7 +30,7 @@ func TestDoLink(t *testing.T) {
 		To:   "out/bashrc",
 	}
 
-	m.doLink()
+	assert.Nil(t, m.doLink())
 	assert.True(t, isSymlink(m.To))
 }
 
@@ -59,9 +59,8 @@ func TestDoCopy(t *testing.T) {
 		To:   "out/bashrc",
 	}
 
-	ok, err := m.doCopy()
+	err := m.doCopy()
 	assert.Nil(t, err)
-	assert.True(t, ok)
 	assert.False(t, isSymlink(m.To))
 
 	// same contents
@@ -88,9 +87,9 @@ func TestUnmap(t *testing.T) {
 		From: "examples/bashrc",
 		To:   "out/bashrc",
 	}
-	m.doLink()
+	assert.Nil(t, m.doLink())
 
-	assert.Nil(t, m.unmap())
+	m.unmap()
 	assert.False(t, pathExists(m.To))
 }
 
@@ -106,7 +105,7 @@ func TestDoMap(t *testing.T) {
 		As:   "link",
 	}
 
-	assert.Nil(t, m.domap())
+	m.domap()
 	assert.True(t, isSymlink(m.To))
 
 	// creates path
@@ -119,7 +118,7 @@ func TestDoMap(t *testing.T) {
 		As:   "copy",
 	}
 
-	assert.Nil(t, m.domap())
+	m.domap()
 	assert.False(t, isSymlink(m.To))
 
 	// same contents
@@ -161,9 +160,8 @@ func TestValidate(t *testing.T) {
 			},
 		},
 	}
-	ok, errs := d.validate()
+	errs := d.validate()
 	assert.Nil(t, errs)
-	assert.True(t, ok)
 
 	// invalid dots: path does not exist
 	d = Dots{
@@ -176,8 +174,7 @@ func TestValidate(t *testing.T) {
 			},
 		},
 	}
-	ok, errs = d.validate()
-	assert.False(t, ok)
+	errs = d.validate()
 	assert.Equal(t, len(errs), 1)
 	assert.Contains(t, errs, fmt.Errorf("%s: path does not exist", d.FileMappings[0].From))
 
@@ -193,8 +190,7 @@ func TestValidate(t *testing.T) {
 			},
 		},
 	}
-	ok, errs = d.validate()
-	assert.False(t, ok)
+	errs = d.validate()
 	assert.Equal(t, len(errs), 1)
 	assert.Contains(t, errs, fmt.Errorf("%s: cannot use copy type with directory", d.FileMappings[0].From))
 }

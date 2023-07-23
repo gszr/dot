@@ -50,44 +50,36 @@ type FileMapping struct {
 	Os   string
 }
 
-// TODO return error - caller handles error
-func (m FileMapping) doLink() {
+func (m FileMapping) doLink() error {
 	err := os.Symlink(m.From, m.To)
 	if err != nil {
-		logger.Fatalf("failed linking %s -> %s: %v", m.From, m.To, err)
+		return err
 	}
-	if flagVerbose {
-		logger.Printf("linking  %s -> %s\n", m.From, m.To)
-	}
+	return nil
 }
 
-// TODO return error - caller handles error
-func (m FileMapping) doCopy() (bool, error) {
+func (m FileMapping) doCopy() error {
 	fin, err := os.Open(m.From)
 	if err != nil {
-		log.Fatalf("failed opening file %s, %v", m.From, err)
+		return err
 	}
 	defer fin.Close()
 
 	fout, err := os.Create(m.To)
 	if err != nil {
-		log.Fatalf("failed creating file %s, %v", m.From, err)
+		return err
 	}
 	defer fout.Close()
 
 	_, err = io.Copy(fout, fin)
 	if err != nil {
-		log.Fatalf("failed copying file %s to %s, %v", m.From, m.To, err)
-	}
-	if flagVerbose {
-		logger.Printf("copying %s -> %s\n", m.From, m.To)
+		return err
 	}
 
-	return true, nil
+	return nil
 }
 
-// TODO return error - caller handles
-func (m FileMapping) unmap() error {
+func (m FileMapping) unmap() {
 	if dstExists := pathExists(m.To); !dstExists && flagVerbose {
 		logger.Printf("rm %s: skipping, file not there\n", m.To)
 	} else {
@@ -99,11 +91,18 @@ func (m FileMapping) unmap() error {
 			logger.Printf("rm %s: success\n", m.To)
 		}
 	}
-	return nil
 }
 
-// TODO return error - caller handles
-func (m FileMapping) domap() error {
+func (m FileMapping) domap() {
+	handleDoMapRes := func(m FileMapping, err error) {
+		if err != nil {
+			logger.Fatalf("failed %s %s -> %s: %v", m.As+"ing", m.From, m.To, err)
+		}
+		if flagVerbose {
+			logger.Printf("%s %s -> %s\n", m.As+"ing", m.From, m.To)
+		}
+	}
+
 	// ensure destination path exists
 	if err := createPath(m.To); err != nil {
 		logger.Fatalf("failed creating path %s, %v", m.To, err)
@@ -111,11 +110,12 @@ func (m FileMapping) domap() error {
 
 	switch typ := m.As; typ {
 	case "link":
-		m.doLink()
+		err := m.doLink()
+		handleDoMapRes(m, err)
 	case "copy":
-		m.doCopy()
+		err := m.doCopy()
+		handleDoMapRes(m, err)
 	}
-	return nil
 }
 
 func (m FileMapping) isMatchingOs() bool {
@@ -155,7 +155,7 @@ func (d *Dots) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return nil
 }
 
-func (dots Dots) validate() (bool, []error) {
+func (dots Dots) validate() []error {
 	var errs []error
 	for _, mapping := range dots.FileMappings {
 		if !pathExists(mapping.From) {
@@ -164,7 +164,7 @@ func (dots Dots) validate() (bool, []error) {
 			errs = append(errs, fmt.Errorf("%s: cannot use copy type with directory", mapping.From))
 		}
 	}
-	return len(errs) == 0, errs
+	return errs
 }
 
 func inferDestination(file string) string {
@@ -289,8 +289,8 @@ func readDotFile(file string) Dots {
 	}
 
 	newDots := dots.transform()
-	valid, errs := newDots.validate()
-	if !valid {
+	errs := newDots.validate()
+	if len(errs) > 0 {
 		for _, err := range errs {
 			logger.Printf("failed validating dots file: %v", err)
 		}
