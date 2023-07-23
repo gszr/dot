@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"strings"
 
+	goversion "github.com/caarlos0/go-version"
 	"gopkg.in/yaml.v3"
 )
 
@@ -20,11 +21,22 @@ import (
 
 var logger *log.Logger
 
-var flagValidateOnly bool
-var flagDotFile string
-var flagVerbose bool
-var flagRmOnly bool
-var flagRm bool
+var (
+	flagValidateOnly bool
+	flagDotFile      string
+	flagVerbose      bool
+	flagRmOnly       bool
+	flagRm           bool
+	flagV            bool
+)
+
+var (
+	version   = "dev"
+	treeState = ""
+	commit    = ""
+	date      = ""
+	builtBy   = ""
+)
 
 func initFlags() {
 	flag.StringVar(&flagDotFile, "dot", "dot.yml", "the dots config file")
@@ -32,11 +44,32 @@ func initFlags() {
 	flag.BoolVar(&flagRm, "rm", true, "remove targets before creating")
 	flag.BoolVar(&flagRmOnly, "rm-only", false, "only remove targets, do not create")
 	flag.BoolVar(&flagValidateOnly, "validate-only", false, "only read and validate dots file")
+	flag.BoolVar(&flagV, "v", false, "print version info")
 }
 
 func init() {
 	initFlags()
 	logger = log.New(os.Stderr, "", 0)
+}
+
+func printVersionInfo() {
+	art := `
+    |          
+  __|   __ _|_ 
+ /  |  /  \_|  
+o\_/|_/\__/ |_/
+`
+	logger.Print(goversion.GetVersionInfo(
+		goversion.WithAppDetails("dot", "a simple dot file manager", ""),
+		goversion.WithASCIIName(art),
+		func(i *goversion.Info) {
+			i.GitCommit = commit
+			i.GitTreeState = treeState
+			i.BuildDate = date
+			i.GitVersion = version
+			i.BuiltBy = builtBy
+		},
+	))
 }
 
 /*
@@ -307,6 +340,12 @@ func readDotFile(file string) Dots {
 
 func main() {
 	flag.Parse()
+
+	if flagV {
+		printVersionInfo()
+		os.Exit(0)
+	}
+
 	dots := readDotFile(flagDotFile)
 	dots.iterate()
 }
