@@ -96,9 +96,6 @@ func (m FileMapping) doLink() error {
 func (m FileMapping) doCopy() error {
 	var inReader io.Reader
 	if len(m.With) > 0 {
-		for v, m := range m.With {
-			logger.Printf("%s %s\n", v, m)
-		}
 		in, err := os.ReadFile(m.From)
 		if err != nil {
 			panic(err)
