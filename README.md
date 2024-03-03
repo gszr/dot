@@ -36,8 +36,12 @@ map:
     respectively (the default is a symlink)
   * `os`: restricts the OS where the mapping applies; can be `linux`, `macos` or
     `all` - if not specified, `all` is implied
+  * `with`: valid only `as: copy` is used; lists variables whose values are replaced
+    in the input file's contents using the [Go templating engine](https://pkg.go.dev/text/template).
+    Currently, the feature exposes the only `.Os` variable within `with` values.
 
-Another example:
+### Examples
+
 ```
 map:
   i3:
@@ -72,6 +76,33 @@ $ tree .
 │   └── Xresources
 └── dot.yml
 ```
+
+#### The templating feature
+
+Some system utilities have built-in support for simple variable substitutions through
+environment variables, while others do not. In these cases, one can use `dot`'s templating
+feature to allow for customizations.
+
+Let's take the following dots spec as an example:
+
+```
+map:
+  gnupg/gpg-agent.conf:
+    as: copy
+    with:
+      PinentryPrefix: '{{if eq .Os "darwin"}}/opt/homebrew/bin{{else}}/usr/bin{{end}}'
+```
+
+The contents of `gnupg/gpg-agent.conf` look like the following:
+```
+default-cache-ttl 1800
+max-cache-ttl 3600
+enable-ssh-support
+pinentry-program {{.PinentryPrefix}}/pinentry-tty
+```
+
+This will result in the correct path to `pinentry-tty` being set during the dot
+file mapping process.
 
 ## Features
 
