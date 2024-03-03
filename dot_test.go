@@ -6,6 +6,7 @@ import (
 	"gopkg.in/yaml.v3"
 	"os"
 	"testing"
+	"runtime"
 )
 
 func isSymlink(path string) bool {
@@ -68,6 +69,27 @@ func TestDoCopy(t *testing.T) {
 	var fromContents []byte
 	var toContents []byte
 	fromContents, err = os.ReadFile(m.From)
+	assert.Nil(t, err)
+	toContents, err = os.ReadFile(m.To)
+	assert.Nil(t, err)
+	assert.Equal(t, fromContents, toContents)
+
+	// copies a file with template
+	m = FileMapping{
+		From: "fixtures/gpg-agent.conf.input",
+		To:   "out/gpg-agent.conf",
+		With: map[string]string {
+			"PinentryPath": "/foo/bar",
+		},
+	}
+
+	err = m.doCopy()
+	assert.Nil(t, err)
+	assert.False(t, isSymlink(m.To))
+
+	// correct contents
+
+	fromContents, err = os.ReadFile("fixtures/gpg-agent.conf.output")
 	assert.Nil(t, err)
 	toContents, err = os.ReadFile(m.To)
 	assert.Nil(t, err)
@@ -340,4 +362,32 @@ func TestGetHomeDir(t *testing.T) {
 		got := getHomeDir()
 		assert.Equal(t, got, want)
 	}
+}
+
+func TestEvalTemplateString(t *testing.T) {
+	cases := map[string]string {
+		"{{ .v1 }}": "a value",
+		"{{ .v2 }}": "<no value>",
+	}
+	env := map[string]string {
+		"v1": "a value",
+	}
+	for templ, want := range cases {
+		got := evalTemplateString(templ, env)
+		assert.Equal(t, want, got)
+	}
+}
+
+func TestEvalTemplate(t *testing.T) {
+	curOs := runtime.GOOS
+	with := map[string]string {
+		"t1": "{{if eq .Os \"" + curOs + "\"}}it works{{end}}",
+		"t2": "{{if eq .Os \"linux\"}}must not be this{{end}}",
+		"t3": "{{if eq .Os \"linux\"}}must not be this{{else}}else{{end}}",
+	}
+
+	res := evalTemplate(with)
+	assert.Equal(t, "it works", res["t1"])
+	assert.Equal(t, "", res["t2"], "")
+	assert.Equal(t, "else", res["t3"])
 }

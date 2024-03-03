@@ -13,6 +13,7 @@ import (
 
 	goversion "github.com/caarlos0/go-version"
 	"gopkg.in/yaml.v3"
+	"text/template"
 )
 
 /*
@@ -81,6 +82,7 @@ type FileMapping struct {
 	To   string
 	As   string
 	Os   string
+	With map[string]string
 }
 
 func (m FileMapping) doLink() error {
@@ -92,11 +94,24 @@ func (m FileMapping) doLink() error {
 }
 
 func (m FileMapping) doCopy() error {
-	fin, err := os.Open(m.From)
-	if err != nil {
-		return err
+	var inReader io.Reader
+	if len(m.With) > 0 {
+		for v, m := range m.With {
+			logger.Printf("%s %s\n", v, m)
+		}
+		in, err := os.ReadFile(m.From)
+		if err != nil {
+			panic(err)
+		}
+		inReader = strings.NewReader(evalTemplateString(string(in), m.With))
+	} else {
+		fin, err := os.Open(m.From)
+		if err != nil {
+			return err
+		}
+		defer fin.Close()
+		inReader = fin
 	}
-	defer fin.Close()
 
 	fout, err := os.Create(m.To)
 	if err != nil {
@@ -104,7 +119,7 @@ func (m FileMapping) doCopy() error {
 	}
 	defer fout.Close()
 
-	_, err = io.Copy(fout, fin)
+	_, err = io.Copy(fout, inReader)
 	if err != nil {
 		return err
 	}
@@ -196,6 +211,10 @@ func (dots Dots) validate() []error {
 		} else if isDirectory(mapping.From) && mapping.As == "copy" {
 			errs = append(errs, fmt.Errorf("%s: cannot use copy type with directory", mapping.From))
 		}
+
+		if mapping.As != "copy" && len(mapping.With) > 0 {
+			errs = append(errs, fmt.Errorf("%s: templating is only supported in `copy` mode ]", mapping.From));
+		}
 	}
 	return errs
 }
@@ -206,6 +225,28 @@ func inferDestination(file string) string {
 	} else {
 		return getHomeDir() + "/." + file
 	}
+}
+
+func evalTemplateString(templStr string, env map[string]string) string {
+	templ, err := template.New("template").Parse(templStr)
+	if err != nil {
+		logger.Fatalf("failed creating template from %s, %v", templStr, err)
+	}
+	var templOut bytes.Buffer
+	err = templ.Execute(&templOut, env)
+	if err != nil {
+		logger.Fatalf("failed executing template, %v", err)
+	}
+	return templOut.String()
+}
+
+func evalTemplate(with map[string]string) map[string]string {
+	newMap := make(map[string]string, len(with))
+	for variable, templ := range with {
+		env := map[string]string{ "Os": runtime.GOOS }
+		newMap[variable] = evalTemplateString(templ, env)
+	}
+	return newMap
 }
 
 func (dots Dots) transform() Dots {
@@ -224,6 +265,10 @@ func (dots Dots) transform() Dots {
 		} else {
 			// infer destination based on From
 			mapping.To = inferDestination(mapping.From)
+		}
+
+		if len(mapping.With) > 0 {
+			mapping.With = evalTemplate(mapping.With)
 		}
 
 		if len(opts.Cd) > 0 {
