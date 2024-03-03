@@ -380,10 +380,16 @@ func TestEvalTemplateString(t *testing.T) {
 
 func TestEvalTemplate(t *testing.T) {
 	curOs := runtime.GOOS
+	var otherOs string
+	if curOs == "darwin" {
+		otherOs = "linux"
+	} else {
+		otherOs = "darwin"
+	}
 	with := map[string]string {
 		"t1": "{{if eq .Os \"" + curOs + "\"}}it works{{end}}",
-		"t2": "{{if eq .Os \"linux\"}}must not be this{{end}}",
-		"t3": "{{if eq .Os \"linux\"}}must not be this{{else}}else{{end}}",
+		"t2": "{{if eq .Os \"" + otherOs + "\"}}must not be this{{end}}",
+		"t3": "{{if eq .Os \"" + otherOs + "\"}}must not be this{{else}}else{{end}}",
 	}
 
 	res := evalTemplate(with)
