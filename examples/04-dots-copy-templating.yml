@@ -1,0 +1,20 @@
+# to, os, as
+
+map:
+  gitconfig:
+    to: out/gitconfig
+    os: all # all, linux, macos
+  zshrc:
+    to: out/zshrc
+    as: copy
+    os: linux
+  gpg-agent.conf:
+    to: out/gpg-agent.conf
+    as: copy
+    os: macos
+    with:
+      PinentryPath: '{{if eq .Os "darwin"}}/opt/homebrew/bin{{else}}/usr/bin{{end}}'
+
+opt:
+  cd: examples/
+
