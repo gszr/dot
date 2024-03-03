@@ -84,6 +84,6 @@ $ tree .
 - [x] `cd` opt (files live under a subdir)
 - [x] Create destination path if needed
 - [x] OS filter
+- [x] CI/CD
 - [ ] Validate dot file
 - [ ] Tests
-- [ ] CI/CD
