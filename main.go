@@ -210,7 +210,7 @@ func (dots Dots) validate() []error {
 		}
 
 		if mapping.As != "copy" && len(mapping.With) > 0 {
-			errs = append(errs, fmt.Errorf("%s: templating is only supported in `copy` mode ]", mapping.From));
+			errs = append(errs, fmt.Errorf("%s: templating is only supported in `copy` mode ]", mapping.From))
 		}
 	}
 	return errs
@@ -240,7 +240,7 @@ func evalTemplateString(templStr string, env map[string]string) string {
 func evalTemplate(with map[string]string) map[string]string {
 	newMap := make(map[string]string, len(with))
 	for variable, templ := range with {
-		env := map[string]string{ "Os": runtime.GOOS }
+		env := map[string]string{"Os": runtime.GOOS}
 		newMap[variable] = evalTemplateString(templ, env)
 	}
 	return newMap

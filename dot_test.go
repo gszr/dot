@@ -5,8 +5,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"gopkg.in/yaml.v3"
 	"os"
-	"testing"
 	"runtime"
+	"testing"
 )
 
 func isSymlink(path string) bool {
@@ -78,7 +78,7 @@ func TestDoCopy(t *testing.T) {
 	m = FileMapping{
 		From: "fixtures/gpg-agent.conf.input",
 		To:   "out/gpg-agent.conf",
-		With: map[string]string {
+		With: map[string]string{
 			"PinentryPath": "/foo/bar",
 		},
 	}
@@ -365,11 +365,11 @@ func TestGetHomeDir(t *testing.T) {
 }
 
 func TestEvalTemplateString(t *testing.T) {
-	cases := map[string]string {
+	cases := map[string]string{
 		"{{ .v1 }}": "a value",
 		"{{ .v2 }}": "<no value>",
 	}
-	env := map[string]string {
+	env := map[string]string{
 		"v1": "a value",
 	}
 	for templ, want := range cases {
@@ -386,7 +386,7 @@ func TestEvalTemplate(t *testing.T) {
 	} else {
 		otherOs = "darwin"
 	}
-	with := map[string]string {
+	with := map[string]string{
 		"t1": "{{if eq .Os \"" + curOs + "\"}}it works{{end}}",
 		"t2": "{{if eq .Os \"" + otherOs + "\"}}must not be this{{end}}",
 		"t3": "{{if eq .Os \"" + otherOs + "\"}}must not be this{{else}}else{{end}}",
