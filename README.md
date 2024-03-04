@@ -2,6 +2,20 @@
 
 dot files manager.
 
+## Download
+
+Download the latest version with:
+
+```
+$ curl --remote-name-all --location  $( \
+    curl -s https://api.github.com/repos/gszr/dot/releases/latest \
+    | grep "browser_download_url.*$(uname -s)-$(uname -m).*" \
+    | cut -d : -f 2,3 \
+    | tr -d \" )
+```
+
+Linux and MacOS on `x86_64` or `arm64`.
+
 ## What
 
 * Map dotfiles living in a directory somehwere -- say, a git repo --  
