@@ -11,7 +11,12 @@ builds:
 
 archives:
   - format: binary
-    name_template: "{{.Binary}}-{{.Os}}-{{.Arch}}-{{.Version}}"
+    name_template: >-
+      {{- .ProjectName }}-
+      {{- .Version }}-
+      {{- title .Os }}-
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else }}{{ .Arch }}{{ end }}
 
 changelog:
   sort: asc
