@@ -2,16 +2,21 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"log"
+	"net/http"
+	"net/url"
 	"os"
 	"path"
+	"path/filepath"
 	"runtime"
 	"strings"
 
 	goversion "github.com/caarlos0/go-version"
+	"github.com/go-git/go-git/v5"
 	"gopkg.in/yaml.v3"
 	"text/template"
 )
@@ -181,12 +186,24 @@ type Opts struct {
 type Dots struct {
 	Opts         Opts          `yaml:"opt"`
 	FileMappings []FileMapping `yaml:"map"`
+	Resources    []Resource    `yaml:"fetch"`
+}
+
+type YamlURL struct {
+	*url.URL
+}
+
+type Resource struct {
+	Url string `yaml:"url"`
+	To  string `yaml:"to"`
+	As  string `yaml:"as"`
 }
 
 func (d *Dots) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	var tmpDots struct {
-		Opts     Opts                   `yaml:"opt"`
-		Mappings map[string]FileMapping `yaml:"map"`
+		Opts      Opts                   `yaml:"opt"`
+		Mappings  map[string]FileMapping `yaml:"map"`
+		Resources []Resource             `yaml:"fetch"`
 	}
 	err := unmarshal(&tmpDots)
 	if err != nil {
@@ -197,6 +214,7 @@ func (d *Dots) UnmarshalYAML(unmarshal func(interface{}) error) error {
 		mapping.From = file
 		d.FileMappings = append(d.FileMappings, mapping)
 	}
+	d.Resources = tmpDots.Resources
 	return nil
 }
 
@@ -211,6 +229,14 @@ func (dots Dots) validate() []error {
 
 		if mapping.As != "copy" && len(mapping.With) > 0 {
 			errs = append(errs, fmt.Errorf("%s: templating is only supported in `copy` mode ]", mapping.From))
+		}
+	}
+	for _, resource := range dots.Resources {
+		if len(resource.To) == 0 {
+			errs = append(errs, fmt.Errorf("%s: resource destination (`to`) cannot be empty", resource.Url))
+		}
+		if len(resource.As) == 0 {
+			errs = append(errs, fmt.Errorf("%s: resource type (`as`) cannot be empty", resource.Url))
 		}
 	}
 	return errs
@@ -284,8 +310,73 @@ func (dots Dots) transform() Dots {
 
 		newDots.FileMappings = append(newDots.FileMappings, mapping)
 	}
+	for _, resource := range dots.Resources {
+		if len(resource.To) > 0 {
+			resource.To = expandTilde(resource.To)
+		}
+
+		newDots.Resources = append(newDots.Resources, resource)
+	}
 
 	return newDots
+}
+
+func fetchGitResource(resource Resource) error {
+	if err := createPath(resource.To); err != nil {
+		return err
+	}
+	_, err := git.PlainClone(resource.To, false, &git.CloneOptions{
+		URL:      resource.Url,
+		Progress: os.Stdout,
+	})
+
+	return err
+}
+
+func fetchHttpResource(resource Resource) error {
+	req, err := http.NewRequest("GET", resource.Url, nil)
+	if err != nil {
+		return err
+	}
+	httpClient := http.Client{}
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if !pathExists(resource.To) {
+		if err := createPath(resource.To); err != nil {
+			return err
+		}
+	}
+
+	if strings.HasSuffix(resource.To, "/") {
+		resource.To = filepath.Join(resource.To, path.Base(resource.Url))
+	}
+
+	fout, err := os.Create(resource.To)
+	if err != nil {
+		return err
+	}
+	defer fout.Close()
+
+	if _, err := io.Copy(fout, resp.Body); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func fetchResource(resource Resource) error {
+	switch resource.As {
+	case "git":
+		return fetchGitResource(resource)
+	case "file":
+		return fetchHttpResource(resource)
+	}
+
+	return nil
 }
 
 func (dots Dots) iterate() {
@@ -303,6 +394,13 @@ func (dots Dots) iterate() {
 			}
 		}
 		mapping.domap()
+	}
+	for _, resource := range dots.Resources {
+		//logger.Printf("%v", resource);
+		err := fetchResource(resource)
+		if err != nil {
+			logger.Printf("error fetching resource %s, %v", resource.Url, err)
+		}
 	}
 }
 
@@ -331,6 +429,9 @@ func pathExists(path string) bool {
 func isDirectory(path string) bool {
 	fileInfo, err := os.Stat(path)
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return false
+		}
 		logger.Fatalf("failed reading path %s, %v", path, err)
 	}
 	return fileInfo.IsDir()

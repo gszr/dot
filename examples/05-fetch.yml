@@ -1,0 +1,40 @@
+# to, os, as
+
+map:
+  gitconfig:
+    to: out/gitconfig
+    os: all # all, linux, macos
+  zshrc:
+    to: out/zshrc
+    as: copy
+    os: linux
+  gpg-agent.conf:
+    to: out/gpg-agent.conf
+    as: copy
+    os: macos
+    with:
+      PinentryPath: '{{if eq .Os "darwin"}}/opt/homebrew/bin{{else}}/usr/bin{{end}}'
+
+fetch:
+- url: https://github.com/gszr/dynamic-colors
+  to: out/dynamic-colors
+  as: git
+- url: https://github.com/altercation/vim-colors-solarized
+  to: out/vim/pack/plugins/start/vim-colors-solarized
+  as: git
+- url: https://github.com/ruanyl/vim-gh-line
+  to: out/vim/pack/plugins/start/vim-gh-line
+  as: git
+- url: https://github.com/mhinz/vim-rfc
+  to: out/vim/pack/plugins/start/vim-rfc
+  as: git
+- url: https://github.com/vimwiki/vimwiki
+  to: out/vim/pack/plugins/start/vimwiki
+  as: git
+- url: https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh
+  to: out/
+  as: file
+
+opt:
+  cd: examples/
+

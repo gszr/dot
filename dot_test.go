@@ -215,6 +215,34 @@ func TestValidate(t *testing.T) {
 	errs = d.validate()
 	assert.Equal(t, len(errs), 1)
 	assert.Contains(t, errs, fmt.Errorf("%s: cannot use copy type with directory", d.FileMappings[0].From))
+
+	// invalid dots: missing resource destination
+	d = Dots{
+		Opts: Opts{},
+		Resources: []Resource{
+			Resource{
+				Url: "http://example.com",
+				As:  "file",
+			},
+		},
+	}
+	errs = d.validate()
+	assert.Equal(t, 1, len(errs))
+	assert.Contains(t, errs, fmt.Errorf("%s: resource destination (`to`) cannot be empty", d.Resources[0].Url))
+
+	// invalid dots: missing resource type
+	d = Dots{
+		Opts: Opts{},
+		Resources: []Resource{
+			Resource{
+				Url: "http://example.com",
+				To:  "/some/path/to/file",
+			},
+		},
+	}
+	errs = d.validate()
+	assert.Equal(t, 1, len(errs))
+	assert.Contains(t, errs, fmt.Errorf("%s: resource type (`as`) cannot be empty", d.Resources[0].Url))
 }
 
 func TestTransform(t *testing.T) {
@@ -265,6 +293,20 @@ func TestTransform(t *testing.T) {
 	dNew = d.transform()
 	assert.NotNil(t, dNew)
 	assert.Equal(t, dNew.FileMappings[0].From, cwd+"/foo/examples/zshrc")
+
+	// expands tilde in resource destination
+	d = Dots{
+		Resources: []Resource{
+			Resource{
+				Url: "http://example.com",
+				To:  "~/some/path/to/file",
+			},
+		},
+	}
+
+	dNew = d.transform()
+	assert.NotNil(t, dNew)
+	assert.Equal(t, home+"/some/path/to/file", dNew.Resources[0].To)
 }
 
 func TestReadDotFile(t *testing.T) {
@@ -396,4 +438,73 @@ func TestEvalTemplate(t *testing.T) {
 	assert.Equal(t, "it works", res["t1"])
 	assert.Equal(t, "", res["t2"], "")
 	assert.Equal(t, "else", res["t3"])
+}
+
+func TestFetchGitResource(t *testing.T) {
+	repo := "https://github.com/gszr/dotfiles"
+	to := "out/dotfiles"
+	defer func() {
+		_ = os.RemoveAll(to)
+	}()
+	resource := Resource{
+		Url: repo,
+		To:  to,
+		As:  "git",
+	}
+	err := fetchGitResource(resource)
+	assert.Nil(t, err)
+	assert.True(t, pathExists(to))
+	assert.True(t, pathExists(to+"/.git"))
+}
+
+func TestFetchHttpResource(t *testing.T) {
+	repo := "https://raw.githubusercontent.com/gszr/dot/main/README.md"
+	to := "out/someFile.md"
+	defer func() {
+		_ = os.RemoveAll(to)
+	}()
+	resource := Resource{
+		Url: repo,
+		To:  to,
+		As:  "file",
+	}
+	err := fetchHttpResource(resource)
+	assert.Nil(t, err)
+	assert.True(t, pathExists(to))
+	assert.True(t, pathExists(to) && !isDirectory(to))
+}
+
+func TestFetchHttpResourceCreatesPath(t *testing.T) {
+	repo := "https://raw.githubusercontent.com/gszr/dot/main/README.md"
+	to := "out/some/path/someFile.md"
+	defer func() {
+		_ = os.RemoveAll(to)
+	}()
+	resource := Resource{
+		Url: repo,
+		To:  to,
+		As:  "file",
+	}
+	err := fetchHttpResource(resource)
+	assert.Nil(t, err)
+	assert.True(t, pathExists(to))
+	assert.True(t, pathExists(to) && !isDirectory(to))
+}
+
+func TestFetchHttpResourceAddsFileNameIfEndingWithSlash(t *testing.T) {
+	repo := "https://raw.githubusercontent.com/gszr/dot/main/README.md"
+	to := "out/some/path/"
+	fullPath := "out/some/path/README.md"
+	defer func() {
+		_ = os.RemoveAll(to)
+	}()
+	resource := Resource{
+		Url: repo,
+		To:  to,
+		As:  "file",
+	}
+	err := fetchHttpResource(resource)
+	assert.Nil(t, err)
+	assert.True(t, pathExists(fullPath))
+	assert.True(t, pathExists(fullPath) && !isDirectory(fullPath))
 }
