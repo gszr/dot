@@ -129,16 +129,18 @@ func (m FileMapping) doCopy() error {
 	return nil
 }
 
-func (m FileMapping) unmap() {
-	if dstExists := pathExists(m.To); !dstExists && flagVerbose {
-		logger.Printf("rm %s: skipping, file not there\n", m.To)
+func unmapPath(path string) {
+	if pathExists := pathExists(path); !pathExists {
+		if flagVerbose {
+			logger.Printf("rm %s: skipping, file not there\n", path)
+		}
 	} else {
-		err := os.Remove(m.To)
+		err := os.Remove(path)
 		if err != nil {
-			logger.Printf("failed removing file %s, %v\n", m.To, err)
+			logger.Printf("failed removing file %s, %v\n", path, err)
 		}
 		if flagVerbose {
-			logger.Printf("rm %s: success\n", m.To)
+			logger.Printf("rm %s: success\n", path)
 		}
 	}
 }
@@ -379,7 +381,7 @@ func fetchResource(resource Resource) error {
 	return nil
 }
 
-func (dots Dots) iterate() {
+func (dots Dots) iterateFileMappings() {
 	for _, mapping := range dots.FileMappings {
 		if !mapping.isMatchingOs() {
 			if flagVerbose {
@@ -388,20 +390,33 @@ func (dots Dots) iterate() {
 			continue
 		}
 		if flagRm { // remove before mapping by default
-			mapping.unmap()
+			unmapPath(mapping.To)
 			if flagRmOnly {
 				continue
 			}
 		}
 		mapping.domap()
 	}
+}
+
+func (dots Dots) iterateResources() {
 	for _, resource := range dots.Resources {
-		//logger.Printf("%v", resource);
+		if flagRm { // remove before mapping by default
+			unmapPath(resource.To)
+			if flagRmOnly {
+				continue
+			}
+		}
 		err := fetchResource(resource)
 		if err != nil {
 			logger.Printf("error fetching resource %s, %v", resource.Url, err)
 		}
 	}
+}
+
+func (dots Dots) iterate() {
+	dots.iterateFileMappings()
+	dots.iterateResources()
 }
 
 /*

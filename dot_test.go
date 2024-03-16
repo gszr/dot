@@ -111,7 +111,7 @@ func TestUnmap(t *testing.T) {
 	}
 	assert.Nil(t, m.doLink())
 
-	m.unmap()
+	unmapPath(m.To)
 	assert.False(t, pathExists(m.To))
 }
 
