@@ -6,13 +6,16 @@ dot files manager.
 
 Download the latest version with:
 
-```
+```sh
 $ curl --remote-name-all --location  $( \
     curl -s https://api.github.com/repos/gszr/dot/releases/latest \
     | grep "browser_download_url.*$(uname -s)-$(uname -m).*" \
     | cut -d : -f 2,3 \
     | tr -d \" )
 ```
+
+(Binaries were aptly named (check `.goreleaser.yml`) so that 
+`uname` could be used directly - no `if`s : )
 
 Linux and MacOS on `x86_64` or `arm64`.
 
@@ -27,7 +30,7 @@ Linux and MacOS on `x86_64` or `arm64`.
 
 Let's start with an example:
 
-```
+```yaml
 map:
   i3:
   imwheelrc:
@@ -56,7 +59,7 @@ map:
 
 ### Examples
 
-```
+```yaml
 map:
   i3:
     os: linux
@@ -76,7 +79,7 @@ opt:
 ```
 
 In this example, all files live under a subdirectory `dots/`:
-```
+```sh
 $ tree .
 .
 ├── dots
@@ -91,7 +94,7 @@ $ tree .
 └── dot.yml
 ```
 
-#### The templating feature
+#### Templating
 
 Some system utilities have built-in support for simple variable substitutions through
 environment variables, while others do not. In these cases, one can use `dot`'s templating
@@ -99,7 +102,7 @@ feature to allow for customizations.
 
 Let's take the following dots spec as an example:
 
-```
+```yaml
 map:
   gnupg/gpg-agent.conf:
     as: copy
@@ -118,6 +121,40 @@ pinentry-program {{.PinentryPrefix}}/pinentry-tty
 This will result in the correct path to `pinentry-tty` being set during the dot
 file mapping process.
 
+#### Fetching resources
+
+Sometimes, our environment relies not only on our own dotfiles, but also on 
+remote resources that need to be downloaded. For example, one may use Vim plugins 
+that are hosted in GitHub ([like myself][1]). For these and other similar use
+cases, `dot` supports fetching remote resources.
+
+See the following chunk of my own `dot` file:
+
+```yaml
+fetch:
+- url: https://github.com/gszr/dynamic-colors
+  to: ~/.dynamic-colors
+  as: git
+- url: https://github.com/altercation/vim-colors-solarized
+  to: ~/.vim/pack/plugins/start/vim-colors-solarized
+  as: git
+- url: https://github.com/ruanyl/vim-gh-line
+  to: ~/.vim/pack/plugins/start/vim-gh-line
+  as: git
+- url: https://github.com/mhinz/vim-rfc
+  to: ~/.vim/pack/plugins/start/vim-rfc
+  as: git
+- url: https://github.com/vimwiki/vimwiki
+  to: ~/.vim/pack/plugins/start/vimwiki
+  as: git
+```
+
+With this, when I run `dot`, all of the Git repositories will be cloned and 
+placed in the destination paths indicated in the `to` field.
+
+Additionally to Git repositories, files can also be downloaded with the
+`as` field set to `file`.
+
 ## Features
 
 - [x] Map source to inferred destination (`file` to `~/.file`)
@@ -132,3 +169,7 @@ file mapping process.
 - [x] CI/CD
 - [ ] Validate dot file
 - [ ] Tests
+
+---
+
+[1]: https://github.com/gszr/dotfiles/tree/51fc06c96d56711457c29a4d4b396ef9e58103ff/dots/vim/pack/plugins/start
