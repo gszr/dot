@@ -16,6 +16,9 @@ archives:
       {{- .Version }}-
       {{- title .Os }}-
       {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "arm64" }}
+        {{- if eq .Os "linux" }}aarch64
+        {{- else }}arm64{{- end }}
       {{- else }}{{ .Arch }}{{ end }}
 
 changelog:
