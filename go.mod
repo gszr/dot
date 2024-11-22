@@ -1,6 +1,6 @@
 module github.com/gszr/dot
 
-go 1.20
+go 1.23
 
 require (
 	github.com/caarlos0/go-version v0.1.1
