@@ -3,7 +3,7 @@ module github.com/gszr/dot
 go 1.23
 
 require (
-	github.com/caarlos0/go-version v0.1.1
+	github.com/caarlos0/go-version v0.2.0
 	github.com/go-git/go-git/v5 v5.11.0
 	github.com/stretchr/testify v1.9.0
 	gopkg.in/yaml.v3 v3.0.1
