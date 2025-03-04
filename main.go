@@ -196,9 +196,10 @@ type YamlURL struct {
 }
 
 type Resource struct {
-	Url string `yaml:"url"`
-	To  string `yaml:"to"`
-	As  string `yaml:"as"`
+	Url  string `yaml:"url"`
+	To   string `yaml:"to"`
+	As   string `yaml:"as"`
+	Skip bool   `yaml:"skip"`
 }
 
 func (d *Dots) UnmarshalYAML(unmarshal func(interface{}) error) error {
@@ -407,9 +408,11 @@ func (dots Dots) iterateResources() {
 				continue
 			}
 		}
-		err := fetchResource(resource)
-		if err != nil {
-			logger.Printf("error fetching resource %s, %v", resource.Url, err)
+		if ! resource.Skip {
+			err := fetchResource(resource)
+			if err != nil {
+				logger.Printf("error fetching resource %s, %v", resource.Url, err)
+			}
 		}
 	}
 }
